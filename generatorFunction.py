@@ -7,10 +7,10 @@ import random
 
 def dataGenerator(dir, batchSize):
     while True:
-        inputTensor = np.empty((0, 1081, 2))
-        outputTensor = np.empty((0, 1081, 2))
+        inputTensor = np.empty((0, 1081, 2)) # batch size, data width, channels
+        outputTensor = np.empty((0, 1081, 2)) # batch size, data width, classes
         for j in range(0, batchSize):
-            filename = random.choice(os.listdir(dir)) #random.sample() would pick unique files
+            filename = random.choice(os.listdir(dir)) # random.sample() would pick unique files
             path = os.path.join(dir, filename)
             r, intensity, label = np.loadtxt(path, delimiter=' ', usecols=(0,2,3), unpack=True)
 
@@ -25,6 +25,6 @@ def dataGenerator(dir, batchSize):
 
         yield inputTensor, outputTensor
 
-for tensor in dataGenerator("/Users/matthew/astrobot/rmc-ml-od/11-17/labeled", 2):
+for tensor in dataGenerator("11-17/labeled", 2):
     print(tensor)
     break
