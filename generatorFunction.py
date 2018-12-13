@@ -14,6 +14,16 @@ def dataGenerator(dir, batchSize):
             path = os.path.join(dir, filename)
             r, intensity, label = np.loadtxt(path, delimiter=' ', usecols=(0,2,3), unpack=True)
 
+            # to flip, or not to flip
+            if random.choice((True, False)):
+                r         = np.flip(r, 0)
+                intensity = np.flip(intensity, 0)
+                label     = np.flip(label, 0)
+
+            # add gaussian noise
+            r         += np.random.normal(0, 1, r.shape) # median, std dev, size
+            intensity += np.random.normal(0, 1, intensity.shape)
+
             # normalize intensity
             intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
 
