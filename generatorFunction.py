@@ -9,20 +9,20 @@ def dataGenerator(dir, batchSize):
     while True:
         inputTensor = np.empty((0, 1081, 2)) # batch size, data width, channels
         outputTensor = np.empty((0, 1081, 2)) # batch size, data width, classes
-        for j in range(0, batchSize):
+        for i in range(0, batchSize):
             filename = random.choice(os.listdir(dir)) # random.sample() would pick unique files
             path = os.path.join(dir, filename)
-            r, intensity, label = np.loadtxt(path, delimiter=' ', usecols=(0,2,3), unpack=True)
+            r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0,2,3), unpack=True)
 
             # to flip, or not to flip
-            if random.choice((True, False)):
-                r         = np.flip(r, 0)
-                intensity = np.flip(intensity, 0)
-                label     = np.flip(label, 0)
+            # if random.choice((True, False)):
+            #     r         = np.flip(r, 0)
+            #     intensity = np.flip(intensity, 0)
+            #     label     = np.flip(label, 0)
 
             # add gaussian noise
-            r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-            intensity += np.random.normal(0, 1, intensity.shape)
+            # r         += np.random.normal(0, 1, r.shape) # median, std dev, size
+            # intensity += np.random.normal(0, 1, intensity.shape)
 
             # normalize intensity
             intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
@@ -35,6 +35,6 @@ def dataGenerator(dir, batchSize):
 
         yield inputTensor, outputTensor
 
-for tensor in dataGenerator("11-17/labeled", 2):
+for tensor in dataGenerator("hackathon", 1):
     print(tensor)
     break
