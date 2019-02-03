@@ -74,10 +74,10 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
 
 
 model = Sequential()
-model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(16, 3, padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(8, 3, padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(2, 3, padding='same', dilation_rate=3, activation='softmax'))
+model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
+model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
+model.add(Conv1D(8, 3, padding='same', dilation_rate=16, activation='relu'))
+model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
 
 model.compile(optimizer='rmsprop',
               loss='categorical_crossentropy',
