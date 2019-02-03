@@ -13,37 +13,7 @@ import math
 
 from MeanIoU import MeanIoU
 
-
-def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
-    """
-    Freezes the state of a session into a pruned computation graph.
-
-    Creates a new computation graph where variable nodes are replaced by
-    constants taking their current value in the session. The new graph will be
-    pruned so subgraphs that are not necessary to compute the requested
-    outputs are removed.
-    @param session The TensorFlow session to be frozen.
-    @param keep_var_names A list of variable names that should not be frozen,
-                          or None to freeze all the variables in the graph.
-    @param output_names Names of the relevant graph outputs.
-    @param clear_devices Remove the device directives from the graph for better portability.
-    @return The frozen graph definition.
-    """
-    graph = session.graph
-    with graph.as_default():
-        freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
-        output_names = output_names or []
-        output_names += [v.op.name for v in tf.global_variables()]
-        input_graph_def = graph.as_graph_def()
-        if clear_devices:
-            for node in input_graph_def.node:
-                node.device = ""
-        frozen_graph = tf.graph_util.convert_variables_to_constants(
-            session, input_graph_def, output_names, freeze_var_names)
-        return frozen_graph
-
-
-def dataGenerator(directory, batchSize, flip=False, noise=False):
+def dataGenerator(directory, batchSize, flip=False, noise=False, shift=False):
     while True:
         inputTensor = np.empty((0, 1081, 2))  # batch size, data width, channels
         outputTensor = np.empty((0, 1081, 2))  # batch size, data width, classes
@@ -60,15 +30,22 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
 
             # add gaussian noise
             if noise:
-                r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-                intensity += np.random.normal(0, 1, intensity.shape)
+                r         += np.random.normal(0, 0.01, r.shape) # median, std dev, size
+                intensity += np.random.normal(0, 0.01, intensity.shape)
 
-            # normalize intensity
-            # intensity = (intensity - np.mean(intensity)) / np.std(intensity)
-            intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+            if shift:
+                indexShift = random.choice(range(-150, 150))
+                np.roll(r, indexShift)
+                np.roll(intensity, indexShift)
 
+            # normalize
+            # r = (r - np.min(r)) / np.ptp(r)
+            # intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+
+            # Standardize
             # r = (r - np.mean(r)) / np.std(r)
-            r = (r - np.min(r)) / np.ptp(r)
+            # intensity = (intensity - np.mean(intensity)) / np.std(intensity)
+
 
             obstacle = label.astype(int)
             notObstacle = 1 - label.astype(int)
@@ -83,8 +60,11 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
 def create_model():
     model = Sequential()
     model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=4, activation='relu'))
     model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
-    model.add(Conv1D(8, 3, padding='same', dilation_rate=16, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=12, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=18, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=28, activation='relu'))
     model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
 
     num_classes = 2
@@ -98,44 +78,50 @@ def create_model():
 
 
 model = create_model()
-model.fit_generator(dataGenerator('data/', batchSize=13, flip=False, noise=False),
-                    epochs=10,
+model.fit_generator(dataGenerator('data/', batchSize=10, flip=True, noise=True, shift=True),
+                    epochs=5,
                     steps_per_epoch=12,
                     use_multiprocessing=True)
 
 inputTensor = np.empty((0, 1081, 2))
-outputTensor = np.empty((0, 1081, 2))
-filename = random.choice(os.listdir('test/'))  # random.sample() would pick unique files
+filename = "labeledData147.txt"#random.choice(os.listdir('test/'))  # random.sample() would pick unique files
 path = os.path.join('test/', filename)
 r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
 
 
-# r = np.flip(r, 0)
-# intensity = np.flip(intensity, 0)
-# label = np.flip(label, 0)
+r = np.flip(r, 0)
+intensity = np.flip(intensity, 0)
+label = np.flip(label, 0)
 
 # add gaussian noise
-#r += np.random.normal(0, .1, r.shape)  # median, std dev, size
-#intensity += np.random.normal(0, .1, intensity.shape)
+r += np.random.normal(0, 0.01, r.shape)  # median, std dev, size
+intensity += np.random.normal(0, 0.01, intensity.shape)
 
-#intensity = (intensity - np.mean(intensity)) / np.std(intensity)
-#intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+indexShift = random.choice(range(-150, 150))
+np.roll(r, indexShift)
+np.roll(intensity, indexShift)
 
-#r = (r - np.mean(r)) / np.std(r)
-#r = (r - np.min(r)) / np.ptp(r)
+# Normalize
+# intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+# r = (r - np.min(r)) / np.ptp(r)
+
+# Standardize
+# r = (r - np.mean(r)) / np.std(r)
+# intensity = (intensity - np.mean(intensity)) / np.std(intensity)
+
 
 obstacle = label.astype(int)
 notObstacle = 1 - label.astype(int)
 
 inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
 
-outputTensor = model.predict(inputTensor)
+
+predict = model.predict(inputTensor)
 
 
 fig = plt.figure()
 
 X = np.array([])
-i = 0
 for point, thetaPoint in zip(inputTensor[0], theta):
     value = point[0] * math.cos(thetaPoint)
     X = np.append(X, value)
@@ -145,10 +131,9 @@ for point, thetaPoint in zip(inputTensor[0], theta):
     value = point[0] * math.sin(thetaPoint)
     Y = np.append(Y, value)
 
-print(np.shape(outputTensor))
-print(np.shape(inputTensor))
 for i in range(len(X)):
-    if outputTensor[0, i, 0] > outputTensor[0, i, 1]:
+    print(predict[0, i, 0])
+    if predict[0, i, 0] > 0.15:
         plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
     else:
         plt.plot(X[i], Y[i], color='blue', marker='+', markersize=1, picker=5)
