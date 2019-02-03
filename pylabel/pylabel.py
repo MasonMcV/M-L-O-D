@@ -20,22 +20,22 @@ import time
 # In[20]:
 
 
-def onpick(event):
-    selected = event.artist
-    xdata = selected.get_xdata()
-    ydata = selected.get_ydata()
-    points = xdata, ydata
-    combinedXY = np.dstack((X,Y))
-    junk, index, junk1 = np.where(combinedXY == (xdata[0],ydata[0]))
-    #print (xdata,ydata)
-    #print (index[0])
-    if TOF[index[0]] != 0:
-        TOF[index[0]] = 0
-        event.artist.set(color='red')
-        fig.show()
-        print ('drawn')
-    #print (TOF[index[0]])
-    return points
+# def onpick(event):
+#     selected = event.artist
+#     xdata = selected.get_xdata()
+#     ydata = selected.get_ydata()
+#     points = xdata, ydata
+#     combinedXY = np.dstack((X,Y))
+#     junk, index, junk1 = np.where(combinedXY == (xdata[0],ydata[0]))
+#     #print (xdata,ydata)
+#     #print (index[0])
+#     if TOF[index[0]] != 0:
+#         TOF[index[0]] = 0
+#         event.artist.set(color='red')
+#         fig.show()
+#         print ('drawn')
+#     #print (TOF[index[0]])
+#     return points
 fig = plt.figure()
 
 
@@ -59,7 +59,7 @@ filename = sys.argv[1]
 # In[5]:
 
 
-r, theta, intensity = np.loadtxt(Dir+'/'+filename,delimiter=' ', skiprows=11, usecols=(0,1,2), unpack=True)
+r, theta, intensity = np.loadtxt(Dir+'/'+filename, delimiter=' ', skiprows=11, usecols=(0,1,2), unpack=True)
 
 
 # converting r theta to x coordinates
@@ -68,10 +68,10 @@ r, theta, intensity = np.loadtxt(Dir+'/'+filename,delimiter=' ', skiprows=11, us
 
 
 X = np.array([])
-for i in range(len(r)) :
+for i in range(len(r)):
     value = r[i] * math.cos(theta[i])
     #print (value)
-    X = np.append(X , value)
+    X = np.append(X, value)
 #print (X)
 
 
@@ -84,7 +84,7 @@ Y = np.array([])
 for i in range(len(r)) :
     value = r[i] * math.sin(theta[i])
     #print (value)
-    Y = np.append(Y , value)
+    Y = np.append(Y, value)
 #print (Y)
 
 
@@ -100,24 +100,5 @@ ax = plt.gca()
 ax.set_title('test')
 ax.set_facecolor('black')
 
-
-# In[9]:
-
-
-TOF = np.array([])
-for i in range(len(X)):
-    TOF = np.append(TOF, 1)
-
-
-# In[10]:
-
-
-fig.canvas.mpl_connect('pick_event', onpick)
 plt.show()
-# timestr = time.strftime("%Y%m%d-%H%M%S")
-filename_base = filename.split('/')[1].split('.')[0]
-outputarray = np.column_stack((r, theta, intensity, TOF))
-print (outputarray)
-with open(Dir+'/output/'+filename_base+'.txt', 'w') as outfile:
-    np.savetxt(outfile, outputarray, delimiter = ' ', header='values = r, theta, intensity, yes or no')
 

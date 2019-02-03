@@ -1,4 +1,3 @@
-import numpy as np
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Conv1D
 import tensorflow as tf
@@ -9,6 +8,8 @@ import os
 import sys
 import numpy as np
 import random
+import matplotlib.pyplot as plt
+import math
 
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
     """
@@ -37,6 +38,7 @@ def freeze_session(session, keep_var_names=None, output_names=None, clear_device
         frozen_graph = tf.graph_util.convert_variables_to_constants(
             session, input_graph_def, output_names, freeze_var_names)
         return frozen_graph
+
 
 def dataGenerator(directory, batchSize):
     while True:
@@ -90,7 +92,8 @@ inputTensor = np.empty((0, 1081, 2))
 outputTensor = np.empty((0, 1081, 2))
 filename = random.choice(os.listdir('test/'))  # random.sample() would pick unique files
 path = os.path.join('test/', filename)
-r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=True)
+r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
+
 
 # to flip, or not to flip
 # if random.choice((True, False)):
@@ -128,12 +131,35 @@ with open("model.json", "w") as json_file:
 print("Saved model to disk")
 
 print
-print model.metrics_names
+print(model.metrics_names)
 
 np.set_printoptions(threshold=sys.maxsize)
-
-print test
 
 # score = model.evaluate(dataGenerator('data/', 5), batch_size=5)
 
 # print score
+fig = plt.figure()
+
+X = np.array([])
+i = 0
+for point, thetaPoint in zip(inputTensor[0], theta):
+    value = point[0] * math.cos(thetaPoint)
+    X = np.append(X, value)
+
+Y = np.array([])
+for point, thetaPoint in zip(inputTensor[0], theta):
+    value = point[0] * math.sin(thetaPoint)
+    Y = np.append(Y, value)
+
+print(np.shape(outputTensor))
+print(np.shape(inputTensor))
+for i in range(len(X)):
+    if outputTensor[0, i, 0] > outputTensor[0, i, 1]:
+        plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
+    else:
+        plt.plot(X[i], Y[i], color='blue', marker='+', markersize=1, picker=5)
+ax = plt.gca()
+ax.set_title('test')
+ax.set_facecolor('black')
+
+plt.show()
