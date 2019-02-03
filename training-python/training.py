@@ -1,10 +1,9 @@
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Conv1D
-import tensorflow as tf
-
 from keras import backend as K
 from keras import optimizers
-from sklearn.model_selection import train_test_split, StratifiedKFold
+import tensorflow as tf
+from sklearn.preprocessing import StandardScaler
 import os
 import sys
 import numpy as np
@@ -13,7 +12,6 @@ import matplotlib.pyplot as plt
 import math
 
 from MeanIoU import MeanIoU
-
 
 
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
@@ -66,7 +64,12 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
                 intensity += np.random.normal(0, 1, intensity.shape)
 
             # normalize intensity
+            intensity = (intensity - np.mean(intensity)) / np.std(intensity)
             intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+
+            r = (r - np.mean(r)) / np.std(r)
+            r = (r - np.min(r)) / np.ptp(r)
+
 
             obstacle = label.astype(int)
             notObstacle = 1 - label.astype(int)
@@ -78,112 +81,100 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
         yield inputTensor, outputTensor
 
 
-# def iou(y_true, y_pred):
-#     intersect = 0
-#     union = 0
-#     # print(K.int_shape(y_true))
-#     # print(K.shape(y_true))
-#     # for i in range(K.shape(y_true)[0]):
-#     print(y_true[0])
-#     if y_true >= 0.5 and y_pred >= 0.5:
-#         intersect += 1
-#         union += 1
-#     elif y_true[0] > 0.5 or y_pred[0] > 0.5:
-#         union += 1
-#     return intersect / union
+def create_model():
+    model = Sequential()
+    model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=16, activation='relu'))
+    model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
 
-num_classes = 2
-miou_metric = MeanIoU(num_classes)
+    num_classes = 2
+    miou_metric = MeanIoU(num_classes)
 
-model = Sequential()
-model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
-model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
-model.add(Conv1D(8, 3, padding='same', dilation_rate=16, activation='relu'))
-model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
-
-optimizers.adam(lr=0.001)
-model.compile(optimizer='adam',
-              loss='categorical_crossentropy',
-              metrics=[miou_metric.mean_iou])
-
-model.fit_generator(dataGenerator('data/', batchSize=13, flip=True), epochs=20, steps_per_epoch=20)
+    optimizers.adam(lr=0.001)
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=[miou_metric.mean_iou])
+    return model
 
 
-#model.summary()
-while 1:
-    input("Press Enter to continue...")
-    inputTensor = np.empty((0, 1081, 2))
-    outputTensor = np.empty((0, 1081, 2))
-    filename = random.choice(os.listdir('test/'))  # random.sample() would pick unique files
-    path = os.path.join('test/', filename)
-    r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
+model = create_model()
+model.fit_generator(dataGenerator('data/', batchSize=13, flip=True, noise=False),
+                    epochs=10,
+                    steps_per_epoch=12,
+                    use_multiprocessing=True)
+
+inputTensor = np.empty((0, 1081, 2))
+outputTensor = np.empty((0, 1081, 2))
+filename = random.choice(os.listdir('test/'))  # random.sample() would pick unique files
+path = os.path.join('test/', filename)
+r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
 
 
-    # to flip, or not to flip
-    # if random.choice((True, False)):
-    #     r         = np.flip(r, 0)
-    #     intensity = np.flip(intensity, 0)
-    #     label     = np.flip(label, 0)
+r = np.flip(r, 0)
+intensity = np.flip(intensity, 0)
+label = np.flip(label, 0)
 
-    # add gaussian noise
-    # r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-    # intensity += np.random.normal(0, 1, intensity.shape)
+# add gaussian noise
+#r += np.random.normal(0, .1, r.shape)  # median, std dev, size
+#intensity += np.random.normal(0, .1, intensity.shape)
 
-    # normalize intensity
-    intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+intensity = (intensity - np.mean(intensity)) / np.std(intensity)
+intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
 
-    obstacle = label.astype(int)
-    notObstacle = 1 - label.astype(int)
+r = (r - np.mean(r)) / np.std(r)
+r = (r - np.min(r)) / np.ptp(r)
 
-    inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
-    outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
+obstacle = label.astype(int)
+notObstacle = 1 - label.astype(int)
 
+inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
 
+outputTensor = model.predict(inputTensor)
 
+frozen_graph = freeze_session(K.get_session(),
+                              output_names=[out.op.name for out in model.outputs])
 
-    prediction = model.predict(inputTensor)
-
-    frozen_graph = freeze_session(K.get_session(),
-                                  output_names=[out.op.name for out in model.outputs])
-
-    tf.train.write_graph(frozen_graph, "./", "my_model.pb", as_text=False)
+tf.train.write_graph(frozen_graph, "./", "my_model.pb", as_text=False)
 
 
-    model_json = model.to_json()
-    with open("model.json", "w") as json_file:
-        json_file.write(model_json)
-    print("Saved model to disk")
+model_json = model.to_json()
+with open("model.json", "w") as json_file:
+    json_file.write(model_json)
+print("Saved model to disk")
 
-    print
-    print(model.metrics_names)
+print
+print(model.metrics_names)
 
-    np.set_printoptions(threshold=sys.maxsize)
+np.set_printoptions(threshold=sys.maxsize)
 
-    # score = model.evaluate(dataGenerator('data/', 5), batch_size=5)
+print(model.evaluate_generator(dataGenerator('test/', 13, flip=False, noise=False),
+                               steps=100,
+                               verbose=1,
+                               use_multiprocessing=True))
 
-    # print score
-    fig = plt.figure()
+fig = plt.figure()
 
-    X = np.array([])
-    i = 0
-    for point, thetaPoint in zip(inputTensor[0], theta):
-        value = point[0] * math.cos(thetaPoint)
-        X = np.append(X, value)
+X = np.array([])
+i = 0
+for point, thetaPoint in zip(inputTensor[0], theta):
+    value = point[0] * math.cos(thetaPoint)
+    X = np.append(X, value)
 
-    Y = np.array([])
-    for point, thetaPoint in zip(inputTensor[0], theta):
-        value = point[0] * math.sin(thetaPoint)
-        Y = np.append(Y, value)
+Y = np.array([])
+for point, thetaPoint in zip(inputTensor[0], theta):
+    value = point[0] * math.sin(thetaPoint)
+    Y = np.append(Y, value)
 
-    print(np.shape(outputTensor))
-    print(np.shape(inputTensor))
-    for i in range(len(X)):
-        if outputTensor[0, i, 0] > outputTensor[0, i, 1]:
-            plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
-        else:
-            plt.plot(X[i], Y[i], color='blue', marker='+', markersize=1, picker=5)
-    ax = plt.gca()
-    ax.set_title('test')
-    ax.set_facecolor('black')
+print(np.shape(outputTensor))
+print(np.shape(inputTensor))
+for i in range(len(X)):
+    if outputTensor[0, i, 0] > outputTensor[0, i, 1]:
+        plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
+    else:
+        plt.plot(X[i], Y[i], color='blue', marker='+', markersize=1, picker=5)
+ax = plt.gca()
+ax.set_title('test')
+ax.set_facecolor('black')
 
-    plt.show()
+plt.show()

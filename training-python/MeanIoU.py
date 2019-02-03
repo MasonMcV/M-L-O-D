@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
+
 class MeanIoU(object):
     def __init__(self, num_classes):
         super().__init__()
