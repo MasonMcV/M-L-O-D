@@ -64,12 +64,11 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
                 intensity += np.random.normal(0, 1, intensity.shape)
 
             # normalize intensity
-            intensity = (intensity - np.mean(intensity)) / np.std(intensity)
+            # intensity = (intensity - np.mean(intensity)) / np.std(intensity)
             intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
 
-            r = (r - np.mean(r)) / np.std(r)
+            # r = (r - np.mean(r)) / np.std(r)
             r = (r - np.min(r)) / np.ptp(r)
-
 
             obstacle = label.astype(int)
             notObstacle = 1 - label.astype(int)
@@ -99,7 +98,7 @@ def create_model():
 
 
 model = create_model()
-model.fit_generator(dataGenerator('data/', batchSize=13, flip=True, noise=False),
+model.fit_generator(dataGenerator('data/', batchSize=13, flip=False, noise=False),
                     epochs=10,
                     steps_per_epoch=12,
                     use_multiprocessing=True)
@@ -111,19 +110,19 @@ path = os.path.join('test/', filename)
 r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
 
 
-r = np.flip(r, 0)
-intensity = np.flip(intensity, 0)
-label = np.flip(label, 0)
+# r = np.flip(r, 0)
+# intensity = np.flip(intensity, 0)
+# label = np.flip(label, 0)
 
 # add gaussian noise
 #r += np.random.normal(0, .1, r.shape)  # median, std dev, size
 #intensity += np.random.normal(0, .1, intensity.shape)
 
-intensity = (intensity - np.mean(intensity)) / np.std(intensity)
-intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+#intensity = (intensity - np.mean(intensity)) / np.std(intensity)
+#intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
 
-r = (r - np.mean(r)) / np.std(r)
-r = (r - np.min(r)) / np.ptp(r)
+#r = (r - np.mean(r)) / np.std(r)
+#r = (r - np.min(r)) / np.ptp(r)
 
 obstacle = label.astype(int)
 notObstacle = 1 - label.astype(int)
@@ -132,26 +131,6 @@ inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
 
 outputTensor = model.predict(inputTensor)
 
-frozen_graph = freeze_session(K.get_session(),
-                              output_names=[out.op.name for out in model.outputs])
-
-tf.train.write_graph(frozen_graph, "./", "my_model.pb", as_text=False)
-
-
-model_json = model.to_json()
-with open("model.json", "w") as json_file:
-    json_file.write(model_json)
-print("Saved model to disk")
-
-print
-print(model.metrics_names)
-
-np.set_printoptions(threshold=sys.maxsize)
-
-print(model.evaluate_generator(dataGenerator('test/', 13, flip=False, noise=False),
-                               steps=100,
-                               verbose=1,
-                               use_multiprocessing=True))
 
 fig = plt.figure()
 
@@ -178,3 +157,24 @@ ax.set_title('test')
 ax.set_facecolor('black')
 
 plt.show()
+
+# frozen_graph = freeze_session(K.get_session(),
+#                               output_names=[out.op.name for out in model.outputs])
+#
+# tf.train.write_graph(frozen_graph, "./", "my_model.pb", as_text=False)
+#
+#
+# model_json = model.to_json()
+# with open("model.json", "w") as json_file:
+#     json_file.write(model_json)
+# print("Saved model to disk")
+#
+# print
+# print(model.metrics_names)
+#
+# np.set_printoptions(threshold=sys.maxsize)
+#
+# print(model.evaluate_generator(dataGenerator('test/', 13, flip=False, noise=False),
+#                                steps=100,
+#                                verbose=1,
+#                                use_multiprocessing=True))
