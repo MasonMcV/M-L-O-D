@@ -1,15 +1,18 @@
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Conv1D
-import tensorflow as tf
-
 from keras import backend as K
-
+from keras import optimizers
+import tensorflow as tf
+from sklearn.preprocessing import StandardScaler
 import os
 import sys
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import math
+
+from MeanIoU import MeanIoU
+
 
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
     """
@@ -40,7 +43,7 @@ def freeze_session(session, keep_var_names=None, output_names=None, clear_device
         return frozen_graph
 
 
-def dataGenerator(directory, batchSize):
+def dataGenerator(directory, batchSize, flip=False, noise=False):
     while True:
         inputTensor = np.empty((0, 1081, 2))  # batch size, data width, channels
         outputTensor = np.empty((0, 1081, 2))  # batch size, data width, classes
@@ -50,17 +53,23 @@ def dataGenerator(directory, batchSize):
             r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=True)
 
             # to flip, or not to flip
-            # if random.choice((True, False)):
-            #     r         = np.flip(r, 0)
-            #     intensity = np.flip(intensity, 0)
-            #     label     = np.flip(label, 0)
+            if flip and random.choice((True, False)):
+                r         = np.flip(r, 0)
+                intensity = np.flip(intensity, 0)
+                label     = np.flip(label, 0)
 
             # add gaussian noise
-            # r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-            # intensity += np.random.normal(0, 1, intensity.shape)
+            if noise:
+                r         += np.random.normal(0, 1, r.shape) # median, std dev, size
+                intensity += np.random.normal(0, 1, intensity.shape)
 
             # normalize intensity
+            intensity = (intensity - np.mean(intensity)) / np.std(intensity)
             intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+
+            r = (r - np.mean(r)) / np.std(r)
+            r = (r - np.min(r)) / np.ptp(r)
+
 
             obstacle = label.astype(int)
             notObstacle = 1 - label.astype(int)
@@ -72,21 +81,28 @@ def dataGenerator(directory, batchSize):
         yield inputTensor, outputTensor
 
 
-model = Sequential()
-model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(16, 3, padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(8, 3, padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(2, 3, padding='same', dilation_rate=3, activation='softmax'))
+def create_model():
+    model = Sequential()
+    model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
+    model.add(Conv1D(8, 3, padding='same', dilation_rate=16, activation='relu'))
+    model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
 
-model.compile(optimizer='rmsprop',
-              loss='categorical_crossentropy',
-              metrics=['accuracy'])
+    num_classes = 2
+    miou_metric = MeanIoU(num_classes)
 
-model.fit_generator(dataGenerator('data/', 13), epochs=2, steps_per_epoch=13)
+    optimizers.adam(lr=0.001)
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=[miou_metric.mean_iou])
+    return model
 
 
-#model.summary()
-
+model = create_model()
+model.fit_generator(dataGenerator('data/', batchSize=13, flip=True, noise=False),
+                    epochs=10,
+                    steps_per_epoch=12,
+                    use_multiprocessing=True)
 
 inputTensor = np.empty((0, 1081, 2))
 outputTensor = np.empty((0, 1081, 2))
@@ -95,29 +111,26 @@ path = os.path.join('test/', filename)
 r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
 
 
-# to flip, or not to flip
-# if random.choice((True, False)):
-#     r         = np.flip(r, 0)
-#     intensity = np.flip(intensity, 0)
-#     label     = np.flip(label, 0)
+r = np.flip(r, 0)
+intensity = np.flip(intensity, 0)
+label = np.flip(label, 0)
 
 # add gaussian noise
-# r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-# intensity += np.random.normal(0, 1, intensity.shape)
+#r += np.random.normal(0, .1, r.shape)  # median, std dev, size
+#intensity += np.random.normal(0, .1, intensity.shape)
 
-# normalize intensity
+intensity = (intensity - np.mean(intensity)) / np.std(intensity)
 intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+
+r = (r - np.mean(r)) / np.std(r)
+r = (r - np.min(r)) / np.ptp(r)
 
 obstacle = label.astype(int)
 notObstacle = 1 - label.astype(int)
 
 inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
-outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
 
-
-
-
-prediction = model.predict(inputTensor)
+outputTensor = model.predict(inputTensor)
 
 frozen_graph = freeze_session(K.get_session(),
                               output_names=[out.op.name for out in model.outputs])
@@ -135,9 +148,11 @@ print(model.metrics_names)
 
 np.set_printoptions(threshold=sys.maxsize)
 
-# score = model.evaluate(dataGenerator('data/', 5), batch_size=5)
+print(model.evaluate_generator(dataGenerator('test/', 13, flip=False, noise=False),
+                               steps=100,
+                               verbose=1,
+                               use_multiprocessing=True))
 
-# print score
 fig = plt.figure()
 
 X = np.array([])
