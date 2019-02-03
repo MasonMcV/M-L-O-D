@@ -10,13 +10,13 @@ import random
 
 # np.set_printoptions(threshold=np.nan)
 
-def dataGenerator(dir, batchSize):
+def dataGenerator(directory, batchSize):
     while True:
         inputTensor = np.empty((0, 1081, 2))  # batch size, data width, channels
         outputTensor = np.empty((0, 1081, 2))  # batch size, data width, classes
         for i in range(0, batchSize):
-            filename = random.choice(os.listdir(dir))  # random.sample() would pick unique files
-            path = os.path.join(dir, filename)
+            filename = random.choice(os.listdir(directory))  # random.sample() would pick unique files
+            path = os.path.join(directory, filename)
             r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=True)
 
             # to flip, or not to flip
@@ -38,15 +38,17 @@ def dataGenerator(dir, batchSize):
             inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
             outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
 
+        print(np.shape(inputTensor))
         yield inputTensor, outputTensor
 
 
-inputTensor = np.empty((0, 1081, 2))
-outputTensor = np.empty((0, 1081, 2))
 
-filename = random.choice(os.listdir('data/'))  # random.sample() would pick unique files
-path = os.path.join(dir, filename)
-r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=True)
+# inputTensor = np.empty((0, 1081, 2))
+# outputTensor = np.empty((0, 1081, 2))
+#
+# filename = random.choice(os.listdir('data/'))  # random.sample() would pick unique files
+# path = os.path.join(dir, filename)
+# r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=True)
 
 # to flip, or not to flip
 # if random.choice((True, False)):
@@ -59,13 +61,13 @@ r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=
 # intensity += np.random.normal(0, 1, intensity.shape)
 
 # normalize intensity
-intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
-
-obstacle = label.astype(int)
-notObstacle = 1 - label.astype(int)
-
-inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
-outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
+# intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+#
+# obstacle = label.astype(int)
+# notObstacle = 1 - label.astype(int)
+#
+# inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
+# outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
 
 # Generate dummy data
 # x_train = np.random.random((1000, 20, 1))
@@ -73,19 +75,18 @@ outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=
 # x_test = np.random.random((100, 20))
 # y_test = np.random.randint(1, size=(100, 1))
 
+
 model = Sequential()
-model.add(Conv1D(8, 3, padding='same', dilation_rate=3, activation='relu'))
+model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=3, activation='relu'))
 model.add(Conv1D(16, 3, padding='same', dilation_rate=3, activation='relu'))
 model.add(Conv1D(8, 3, padding='same', dilation_rate=3, activation='relu'))
-model.add(Conv1D(1, 3, padding='same', dilation_rate=3, activation='relu'))
+model.add(Conv1D(2, 3, padding='same', dilation_rate=3, activation='softmax'))
 
-model.compile(loss='binary_crossentropy',
-              optimizer='rmsprop',
+model.compile(optimizer='rmsprop',
+              loss='categorical_crossentropy',
               metrics=['accuracy'])
 
-dataset = dataGenerator('data/', 15)
-
-model.fit(, epochs = 20)
+model.fit_generator(dataGenerator('data/', 13), epochs=20, steps_per_epoch=13)
 
 # score = model.evaluate(dataGenerator('data/', 5), batch_size=5)
 
