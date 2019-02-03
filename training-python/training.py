@@ -1,16 +1,16 @@
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Conv1D
+from keras.layers import Dense, Dropout, Conv1D, BatchNormalization
 from keras import backend as K
 from keras import optimizers
 import tensorflow as tf
-from sklearn.preprocessing import StandardScaler
+#from sklearn.preprocessing import StandardScaler
 import os
 import sys
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import math
-
+from keras.optimizers import adam
 from MeanIoU import MeanIoU
 
 def dataGenerator(directory, batchSize, flip=False, noise=False, shift=False):
@@ -40,7 +40,7 @@ def dataGenerator(directory, batchSize, flip=False, noise=False, shift=False):
 
             # normalize
             # r = (r - np.min(r)) / np.ptp(r)
-            intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+            intensity = intensity / 262144.0#(intensity - np.min(intensity)) / np.ptp(intensity)
 
             # Standardize
             # r = (r - np.mean(r)) / np.std(r)
@@ -53,36 +53,46 @@ def dataGenerator(directory, batchSize, flip=False, noise=False, shift=False):
             inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
             outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
 
-        #print(np.shape(inputTensor))
+       # print(outputTensor)
+
         yield inputTensor, outputTensor
 
 
 def create_model():
     model = Sequential()
-    model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
-    model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
-    model.add(Conv1D(16, 7, padding='same', dilation_rate=4, activation='relu'))
-    model.add(Conv1D(16, 7, padding='same', dilation_rate=8, activation='relu'))
-    model.add(Conv1D(16, 7, padding='same', dilation_rate=16, activation='relu'))
-    model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
-    model.add(Conv1D(8, 3, padding='same', dilation_rate=4, activation='relu'))
+    model.add(Conv1D(32, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Conv1D(32, 3, padding='same', dilation_rate=2, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Conv1D(32, 3, padding='same', dilation_rate=4, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Conv1D(32, 3, padding='same', dilation_rate=8, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Conv1D(32, 3, padding='same', dilation_rate=16, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Conv1D(32, 3, padding='same', dilation_rate=32, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Conv1D(32, 3, padding='same', dilation_rate=64, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.2))
     model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
 
     num_classes = 2
     miou_metric = MeanIoU(num_classes)
 
-    optimizers.adam(lr=0.001)
-    model.compile(optimizer='adam',
+    model.compile(optimizer=adam(lr=0.001),
                   loss='categorical_crossentropy',
-                  metrics=[miou_metric.mean_iou])
+                  metrics=['accuracy', miou_metric.mean_iou])
     return model
 
 
 model = create_model()
-model.fit_generator(dataGenerator('data/', batchSize=72, flip=True, noise=False, shift=True),
-                    epochs=7,
-                    steps_per_epoch=20,
-                    use_multiprocessing=True)
+print('params:')
+print(model.count_params())
+
+model.fit_generator(dataGenerator('data/', batchSize=16, flip=True, noise=True, shift=True),
+                    epochs=100,
+                    steps_per_epoch=20)
 
 
 
@@ -106,7 +116,8 @@ for i in range(1, 10):
     np.roll(intensity, indexShift)
 
     # Normalize
-    intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+    #intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
+    intensity = intensity / 262144
     # r = (r - np.min(r)) / np.ptp(r)
 
     # Standardize
@@ -136,7 +147,7 @@ for i in range(1, 10):
         Y = np.append(Y, value)
 
     for i in range(len(X)):
-        print(predict[0, i, 0])
+        #print(predict[0, i, 0])
         if predict[0, i, 0] > 0.1:
             plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
         else:
