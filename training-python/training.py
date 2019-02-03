@@ -40,7 +40,7 @@ def freeze_session(session, keep_var_names=None, output_names=None, clear_device
         return frozen_graph
 
 
-def dataGenerator(directory, batchSize):
+def dataGenerator(directory, batchSize, flip=False, noise=False):
     while True:
         inputTensor = np.empty((0, 1081, 2))  # batch size, data width, channels
         outputTensor = np.empty((0, 1081, 2))  # batch size, data width, classes
@@ -50,14 +50,15 @@ def dataGenerator(directory, batchSize):
             r, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 2, 3), unpack=True)
 
             # to flip, or not to flip
-            # if random.choice((True, False)):
-            #     r         = np.flip(r, 0)
-            #     intensity = np.flip(intensity, 0)
-            #     label     = np.flip(label, 0)
+            if flip and random.choice((True, False)):
+                r         = np.flip(r, 0)
+                intensity = np.flip(intensity, 0)
+                label     = np.flip(label, 0)
 
             # add gaussian noise
-            # r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-            # intensity += np.random.normal(0, 1, intensity.shape)
+            if noise:
+                r         += np.random.normal(0, 1, r.shape) # median, std dev, size
+                intensity += np.random.normal(0, 1, intensity.shape)
 
             # normalize intensity
             intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
@@ -82,84 +83,84 @@ model.compile(optimizer='rmsprop',
               loss='categorical_crossentropy',
               metrics=['accuracy'])
 
-model.fit_generator(dataGenerator('data/', 13), epochs=2, steps_per_epoch=13)
+model.fit_generator(dataGenerator('data/', batchSize=13, flip=True), epochs=10, steps_per_epoch=20)
 
 
 #model.summary()
+while 1:
+    input("Press Enter to continue...")
+    inputTensor = np.empty((0, 1081, 2))
+    outputTensor = np.empty((0, 1081, 2))
+    filename = random.choice(os.listdir('test/'))  # random.sample() would pick unique files
+    path = os.path.join('test/', filename)
+    r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
 
 
-inputTensor = np.empty((0, 1081, 2))
-outputTensor = np.empty((0, 1081, 2))
-filename = random.choice(os.listdir('test/'))  # random.sample() would pick unique files
-path = os.path.join('test/', filename)
-r, theta, intensity, label = np.loadtxt(path, delimiter=',', usecols=(0, 1, 2, 3), unpack=True)
+    # to flip, or not to flip
+    # if random.choice((True, False)):
+    #     r         = np.flip(r, 0)
+    #     intensity = np.flip(intensity, 0)
+    #     label     = np.flip(label, 0)
 
+    # add gaussian noise
+    # r         += np.random.normal(0, 1, r.shape) # median, std dev, size
+    # intensity += np.random.normal(0, 1, intensity.shape)
 
-# to flip, or not to flip
-# if random.choice((True, False)):
-#     r         = np.flip(r, 0)
-#     intensity = np.flip(intensity, 0)
-#     label     = np.flip(label, 0)
+    # normalize intensity
+    intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
 
-# add gaussian noise
-# r         += np.random.normal(0, 1, r.shape) # median, std dev, size
-# intensity += np.random.normal(0, 1, intensity.shape)
+    obstacle = label.astype(int)
+    notObstacle = 1 - label.astype(int)
 
-# normalize intensity
-intensity = (intensity - np.min(intensity)) / np.ptp(intensity)
-
-obstacle = label.astype(int)
-notObstacle = 1 - label.astype(int)
-
-inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
-outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
+    inputTensor = np.append(inputTensor, np.dstack((r, intensity)), axis=0)
+    outputTensor = np.append(outputTensor, np.dstack((obstacle, notObstacle)), axis=0)
 
 
 
 
-prediction = model.predict(inputTensor)
+    prediction = model.predict(inputTensor)
 
-frozen_graph = freeze_session(K.get_session(),
-                              output_names=[out.op.name for out in model.outputs])
+    frozen_graph = freeze_session(K.get_session(),
+                                  output_names=[out.op.name for out in model.outputs])
 
-tf.train.write_graph(frozen_graph, "./", "my_model.pb", as_text=False)
+    tf.train.write_graph(frozen_graph, "./", "my_model.pb", as_text=False)
 
 
-model_json = model.to_json()
-with open("model.json", "w") as json_file:
-    json_file.write(model_json)
-print("Saved model to disk")
+    model_json = model.to_json()
+    with open("model.json", "w") as json_file:
+        json_file.write(model_json)
+    print("Saved model to disk")
 
-print
-print(model.metrics_names)
+    print
+    print(model.metrics_names)
 
-np.set_printoptions(threshold=sys.maxsize)
+    np.set_printoptions(threshold=sys.maxsize)
 
-# score = model.evaluate(dataGenerator('data/', 5), batch_size=5)
+    # score = model.evaluate(dataGenerator('data/', 5), batch_size=5)
 
-# print score
-fig = plt.figure()
+    # print score
+    fig = plt.figure()
 
-X = np.array([])
-i = 0
-for point, thetaPoint in zip(inputTensor[0], theta):
-    value = point[0] * math.cos(thetaPoint)
-    X = np.append(X, value)
+    X = np.array([])
+    i = 0
+    for point, thetaPoint in zip(inputTensor[0], theta):
+        value = point[0] * math.cos(thetaPoint)
+        X = np.append(X, value)
 
-Y = np.array([])
-for point, thetaPoint in zip(inputTensor[0], theta):
-    value = point[0] * math.sin(thetaPoint)
-    Y = np.append(Y, value)
+    Y = np.array([])
+    for point, thetaPoint in zip(inputTensor[0], theta):
+        value = point[0] * math.sin(thetaPoint)
+        Y = np.append(Y, value)
 
-print(np.shape(outputTensor))
-print(np.shape(inputTensor))
-for i in range(len(X)):
-    if outputTensor[0, i, 0] > outputTensor[0, i, 1]:
-        plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
-    else:
-        plt.plot(X[i], Y[i], color='blue', marker='+', markersize=1, picker=5)
-ax = plt.gca()
-ax.set_title('test')
-ax.set_facecolor('black')
+    print(np.shape(outputTensor))
+    print(np.shape(inputTensor))
+    for i in range(len(X)):
+        if outputTensor[0, i, 0] > outputTensor[0, i, 1]:
+            plt.plot(X[i], Y[i], color='yellow', marker='x', markersize=1, picker=5)
+        else:
+            plt.plot(X[i], Y[i], color='blue', marker='+', markersize=1, picker=5)
+    ax = plt.gca()
+    ax.set_title('test')
+    ax.set_facecolor('black')
 
-plt.show()
+    plt.show()
