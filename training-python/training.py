@@ -3,13 +3,18 @@ from keras.layers import Dense, Dropout, Conv1D
 import tensorflow as tf
 
 from keras import backend as K
-
+from keras import optimizers
+from sklearn.model_selection import train_test_split, StratifiedKFold
 import os
 import sys
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import math
+
+from MeanIoU import MeanIoU
+
+
 
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
     """
@@ -73,17 +78,35 @@ def dataGenerator(directory, batchSize, flip=False, noise=False):
         yield inputTensor, outputTensor
 
 
+# def iou(y_true, y_pred):
+#     intersect = 0
+#     union = 0
+#     # print(K.int_shape(y_true))
+#     # print(K.shape(y_true))
+#     # for i in range(K.shape(y_true)[0]):
+#     print(y_true[0])
+#     if y_true >= 0.5 and y_pred >= 0.5:
+#         intersect += 1
+#         union += 1
+#     elif y_true[0] > 0.5 or y_pred[0] > 0.5:
+#         union += 1
+#     return intersect / union
+
+num_classes = 2
+miou_metric = MeanIoU(num_classes)
+
 model = Sequential()
 model.add(Conv1D(8, 3, input_shape=(1081, 2), padding='same', dilation_rate=1, activation='relu'))
 model.add(Conv1D(8, 3, padding='same', dilation_rate=8, activation='relu'))
 model.add(Conv1D(8, 3, padding='same', dilation_rate=16, activation='relu'))
 model.add(Conv1D(2, 3, padding='same', dilation_rate=1, activation='softmax'))
 
-model.compile(optimizer='rmsprop',
+optimizers.adam(lr=0.001)
+model.compile(optimizer='adam',
               loss='categorical_crossentropy',
-              metrics=['accuracy'])
+              metrics=[miou_metric.mean_iou])
 
-model.fit_generator(dataGenerator('data/', batchSize=13, flip=True), epochs=10, steps_per_epoch=20)
+model.fit_generator(dataGenerator('data/', batchSize=13, flip=True), epochs=20, steps_per_epoch=20)
 
 
 #model.summary()
